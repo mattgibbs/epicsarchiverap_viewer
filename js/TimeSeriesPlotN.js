@@ -928,35 +928,29 @@ function (
             } else {
                 this._cxtPlot.clearRect(xMin+1, yMin,   width-1, height) ;
             }
-            var xFormattedLabels ;
+            var xLabelsGenerator ;
             if (xDelta < 61) {
                 var format = ':SS' ;
                 var xDesiredTicks = 10 ;
-                var xLabelsGenerator = new LabelGenerator.forSeconds () ;
-                var xLabels = xLabelsGenerator.search(xRangeMin, xRangeMax, xDesiredTicks) ;
-                xFormattedLabels = xLabels.empty_duplicates(xLabels.pretty_formatted_timestamps()[format]) ;
+                xLabelsGenerator = new LabelGenerator.forSeconds () ;
             } else if (xDelta < 10 * 60 + 1) {
                 var format = 'HH:MM:SS' ;
                 var xDesiredTicks = 6 ;
-                var xLabelsGenerator = new LabelGenerator.forMinutes () ;
-                var xLabels = xLabelsGenerator.search(xRangeMin, xRangeMax, xDesiredTicks) ;
-                xFormattedLabels = xLabels.empty_duplicates(xLabels.pretty_formatted_timestamps()[format]) ;
+                xLabelsGenerator = new LabelGenerator.forMinutes () ;
             } else if (xDelta < 2 * 24 * 3600) {
                 var format = 'HH:MM' ;
                 var xLabelWidth = this._cxtPlot.measureText(format).width ;
                 var xDesiredTicks = 10 * Math.max(1, Math.floor(this._geom.PLOT_WIDTH / (1.5 * xLabelWidth) / 10)) ;
-                var xLabelsGenerator = new LabelGenerator.forMinutes() ;
-                var xLabels = xLabelsGenerator.search(xRangeMin, xRangeMax, xDesiredTicks) ;
-                xFormattedLabels = xLabels.empty_duplicates(xLabels.pretty_formatted_timestamps()[format]) ;
+                xLabelsGenerator = new LabelGenerator.forMinutes() ;
             } else {
                 var format = 'YYYY-MM-DD' ;
                 var xLabelWidth = this._cxtPlot.measureText(format).width ;
                 var xDesiredTicks = 2 * Math.max(1, Math.floor(this._geom.PLOT_WIDTH / (1.5 * xLabelWidth) / 2)) ;
-                var xLabelsGenerator = new LabelGenerator.forDays() ;
-                var xLabels = xLabelsGenerator.search(xRangeMin, xRangeMax, xDesiredTicks) ;
-                xFormattedLabels = xLabels.empty_duplicates(xLabels.pretty_formatted_timestamps()[format]) ;
+                xLabelsGenerator = new LabelGenerator.forDays() ;
             }
-
+            var xLabels = xLabelsGenerator.search(xRangeMin, xRangeMax, xDesiredTicks) ;
+            var xFormattedLabels = xLabels.empty_duplicates(xLabels.pretty_formatted_timestamps()[format]) ;
+            
             var xStepSize = this._geom.PLOT_WIDTH / (xFormattedLabels.length + 1) ;
 
             var y = this._geom.PLOT_Y_MAX ,
@@ -968,19 +962,27 @@ function (
             this._cxtPlot.textAlign = 'center';
             this._cxtPlot.moveTo(this._geom.PLOT_X_MIN, y) ;
             this._cxtPlot.lineTo(this._geom.PLOT_X_MAX, y) ;
-          
-            for (var step = 0, x = this._geom.PLOT_X_MIN + xStepSize ;  // no tick at position 0
-                     step < xFormattedLabels.length ;                   // no tick at the end
-                   ++step,     x += xStepSize)
-            {
-                this._cxtPlot.moveTo(x, y) ;
-                this._cxtPlot.lineTo(x, y + _TICK_SIZE) ;
-                var label = ''+xFormattedLabels[step].text ;
-                // Note that the starting point of the text is
-                // depends on the alignment. If the text is center aligned then
-                // the central position fo the label text will be consider for text placement .
-                this._cxtPlot.fillText(label, x, yLabelOffset) ;
+            
+            for (var labelIndex = 0 ; labelIndex < xFormattedLabels.length ; labelIndex++) {
+                var label = xFormattedLabels[labelIndex] ;
+                var x = xMin + (label.value - xRangeMin) / xDelta * width ;
+                if (x >= xMin && x <= xMax) {
+                    this._cxtPlot.moveTo(x, y) ;
+                    this._cxtPlot.lineTo(x, y + _TICK_SIZE) ;
+                    // Note that the starting point of the text is
+                    // depends on the alignment. If the text is center aligned then
+                    // the central position fo the label text will be consider for text placement .
+                    // Assuming center alignment for the purpose of checking if the text fits.
+                    var labelText = ''+label.text ;
+                    var textWidth = this._cxtPlot.measureText(labelText).width ;
+                    if (x - textWidth/2 >= xMin &&
+                        x + textWidth/2 <= xMax
+                    ) {
+                        this._cxtPlot.fillText(labelText, x, yLabelOffset) ;
+                    }
+                }
             }
+            
             this._cxtPlot.strokeStyle = _PRIMARY_AXIS_COLOR ;
             this._cxtPlot.lineWidth   = 1 ;
             this._cxtPlot.stroke();
@@ -990,29 +992,6 @@ function (
             this._cxtPlot.moveTo(this._geom.PLOT_X_MIN, yLabelOffset + _LABEL_FONT_SIZE) ;
             this._cxtPlot.lineTo(this._geom.PLOT_X_MAX, yLabelOffset + _LABEL_FONT_SIZE) ;
             this._cxtPlot.lineWidth = 1 ;
-            this._cxtPlot.stroke();
-
-            this._cxtPlot.font      = _LABEL_FONT ;
-            this._cxtPlot.fillStyle = 'black' ;
-            this._cxtPlot.textAlign = 'center';
-
-            this._cxtPlot.beginPath() ;
-            
-            for (var step = 0, x = this._geom.PLOT_X_MIN + xStepSize ;      // no tick at position 0
-                     step < xFormattedLabels.length ;                       // no tick at the end
-                   ++step,     x += xStepSize)
-            {
-                if (step == 25) {
-                    this._cxtPlot.moveTo(x, yLabelOffset + _LABEL_FONT_SIZE) ;
-                    this._cxtPlot.lineTo(x, yLabelOffset + _LABEL_FONT_SIZE + _TICK_SIZE) ;
-                    // Note that the starting point of the text is
-                    // depends on the alignment. If the text is center aligned then
-                    // the central position fo the label text will be consider for text placement .
-                    this._cxtPlot.fillText('2015-06-10', x, yLabelOffset + 3 * _LABEL_FONT_SIZE) ;
-                }
-            }
-            this._cxtPlot.lineWidth = 1 ;
-            this._cxtPlot.strokeStyle = _AXIS_COLOR ;
             this._cxtPlot.stroke();
             
             // ATTENTION: the region also include the plot area. This may change
