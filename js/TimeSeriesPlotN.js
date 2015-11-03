@@ -827,7 +827,7 @@ function (
 
                 var yLabelWidth = 0 ;
                 var yFormattedLabels = series.yLabels.pretty_formatted() ;
-                console.log(yFormattedLabels) ;
+                //console.log(yFormattedLabels) ;
                 
                 for (var j in yFormattedLabels) {
                     var label = yFormattedLabels[j] ;
@@ -891,7 +891,7 @@ function (
                 x: this._geom.PLOT_X_MAX - _DOWNLOAD_IMAGE_WIDTH ,
                 y: this._geom.PLOT_Y_MIN
             } ;
-            console.log('this._geom', this._geom) ;
+            //console.log('this._geom', this._geom) ;
         } ;
 
         this._clearPlot = function () {
@@ -1290,7 +1290,7 @@ function (
         } ;
         this._plotDataLinear = function (deltaX, series, sid) {
 
-            console.log("_plotDataLinear: "+series.name+' series.yLabels.min: '+series.yLabels.min) ;
+            //console.log("_plotDataLinear: "+series.name+' series.yLabels.min: '+series.yLabels.min) ;
 
             var xDelta = this._xRange.max - this._xRange.min ,
                 x0     = this._geom.PLOT_X_MIN + (deltaX               ? deltaX : 0) ,
@@ -1326,7 +1326,7 @@ function (
         } ;
         this._plotDataLog10 = function (deltaX,series, sid) {
 
-            console.log("_plotDataLog10: series: "+series.name+' yLabels.min: '+series.yLabels.min+' yLabels.max: '+series.yLabels.max+' yLabels.get().length: '+series.yLabels.get().length) ;
+            //console.log("_plotDataLog10: series: "+series.name+' yLabels.min: '+series.yLabels.min+' yLabels.max: '+series.yLabels.max+' yLabels.get().length: '+series.yLabels.get().length) ;
 
             var xDelta = this._xRange.max - this._xRange.min ,
                 x0     = this._geom.PLOT_X_MIN + (deltaX               ? deltaX : 0) ,
