@@ -64,30 +64,27 @@ require ([
       cssloader.load('js/jquery/css/custom-theme-1.9.1/jquery-ui.custom.css');
       function EpicsViewer (pvs) {
         var _that = this ;
-        this._options = {
-            pvs: pvs ? pvs : []
-        } ;
+        this._needs_loadinfo = pvs? pvs : [];
+        this._to_be_connected = [];
+        this._is_connected = [];
         this._pvfinder = null ;         // UI for searching PVs to be included into the work set
         this._selected = null ;         // the current workset table
         this._interval = null ;         // the current timeine interval management
         // displays (plots)
         this._displaySelector = null ;
-        // total number of PVs to be loaded
-        this._num2load = 0 ;
         // range locking for PVs
         this._y_range_lock = {} ;
         // rendering is done only once
         this._is_rendered = false ;
+        this._animations_started = false;
         this.run = function () {
           if (this._is_rendered) return;
           this._is_rendered = true;
           //Make a Finder, which is how you select PVs.
           this._pvfinder = new Finder ($('#finder'), {
               on_select: function (pvname) {
-                  if (_.indexOf(_that._options.pvs, pvname) === -1) {
-                      _that._options.pvs.push(pvname) ;
-                      _that._num2load++ ;
-                      _that.load_pvtypeinfo(pvname) ;
+                  if ((_.indexOf(_that._is_connected, pvname) === -1) && (_.indexOf(_that._to_be_connected, pvname) === -1)) {
+                      _that.load_pvtypeinfo(pvname);
                   }
               }
           }) ;
@@ -104,7 +101,7 @@ require ([
               _that.ds.resize() ;
           }) ;
           
-          //Make an Interval item, which is sort of like the X axis for our plot.
+          //Make an Interval item, which is sort of like the X axis setting for our plot.
           this._interval = new Interval.Interval ({
               changes_allowed: function () {
                 return true;
@@ -154,23 +151,27 @@ require ([
                     }
                 } ,
                 download_requested: function (dataURL) {
-                    // Change MIME type to trick the browser to download
-                    // the file instead of displaying it.
-                    // dataURL = dataURL.replace(/^data:image\/[^;]*/, 'data:application/octet-stream');
-                    // In addition to <a>'s "download" attribute, you can
-                    // define HTTP-style headers.
-                    // dataURL = dataURL.replace(/^data:application\/octet-stream/, 'data:application/octet-stream;headers=Content-Disposition%3A%20attachment%3B%20filename=Canvas.png');
-
                     window.open(dataURL, '_blank') ;
                 } ,
                 download_allowed: function () {
-                    return false
+                  return false;
                 }
               }) //End of plot instantiation.
             }
           ]); // End of DisplaySelector instantiation.
           
           this.pvtypeinfo = {};
+          //Initialize a bunch of state variables.
+          var _DEFAULT_PLOT_COLOR = ['#0071bc', '#983352', '#277650', '#333676', '#AA5939'] ;
+          this._colorCounter = 0 ;
+          this._getNextColor = function () {
+              return _DEFAULT_PLOT_COLOR[this._colorCounter++ % _DEFAULT_PLOT_COLOR.length] ;
+          };
+          this._plot = {};
+          this._colors = {};
+          this._processing = {};
+          this._scales = {};
+          this._selectedPVs = {};
           //Get the PV type from the archiver.
           this.load_pvtypeinfo = function (pvname) {
               WebService.GET (
@@ -195,24 +196,13 @@ require ([
                       }
                       _that.pvtypeinfo[pvname] = data;
                       _that._addEntryToSelected(pvname);
-                      //_that.load_timeline(pvname);
                   }
               );
           };
-          //Initialize a bunch of state variables.
-          var _DEFAULT_PLOT_COLOR = ['#0071bc', '#983352', '#277650', '#333676', '#AA5939'] ;
-          this._colorCounter = 0 ;
-          this._getNextColor = function () {
-              return _DEFAULT_PLOT_COLOR[this._colorCounter++ % _DEFAULT_PLOT_COLOR.length] ;
-          };
-          this._plot = {};
-          this._colors = {};
-          this._processing = {};
-          this._scales = {};
-          this._selectedPVs = {};
+          
           this._addEntryToSelected = function (pvname) {
               this._plot[pvname] = true ;
-              this._colors[pvname] = this._getNextColor() ;
+              this._colors[pvname] = this._getNextColor();
               this._processing[pvname] = '' ;
               this._scales[pvname] = 'linear' ;
               var html =
@@ -256,14 +246,13 @@ require ([
                   _that._removeEntryFromSelected(pvname) ;
               }) ;
               */
-              /*
+              
               this._selectedPVs[pvname].find('input[name="plot"]').change(function () {
                   var tr = $(this).closest('tr') ;
                   var pvname = tr.prop('id') ;
                   _that._plot[pvname] = $(this).prop('checked') ? true : false ;
-                  //_that.display_timeline() ;
               }) ;
-              */
+              
               /*
               this._selectedPVs[pvname].find('select[name="processing"]').change(function () {
                   var tr = $(this).closest('tr') ;
@@ -279,7 +268,9 @@ require ([
                   //delete _that._y_range_lock[pvname] ;
                   //_that._loadAllTimeLines() ;
               }).prop('disabled', true) ;*/
+              _that._start_pv_connection(pvname);
           } ;
+          
           /*
           this._removeEntryFromSelected = function (pvname) {
               delete this._plot[pvname] ;
@@ -303,88 +294,126 @@ require ([
               }
           } ;*/
           
-          if (this._options.pvs) {
-              for (var i = 0; i < this._options.pvs.length; ++i) {
-                  this._num2load++;
-                  this.load_pvtypeinfo(this._options.pvs[i]) ;
-              }
-          }
-      
           if ('WebSocket' in window) {
             this._socket = new WebSocket(window.global_options.websockets_url_base);
           } else if ('MozWebSocket' in window) {
             this._socket = new MozWebSocket(window.global_options.websockets_url_base);
           }
-      
-          this._buffer_size = 3000;
-          this.pv_data = [];
-          this.data_index_for_pv = {}
-          this._options.pvs.forEach(function(pv, i) {
-            //_that._plot[pv] = true ;
-            //_that._colors[pv] = _that._getNextColor();
-            //_that._processing[pv] = '';
-            //_that._scales[pv] = 'linear';
-            _that.pv_data.push({
+          
+          this._send_pv_request = function(pv) {
+            console.log("Connecting to " + pv);
+            _that.pv_data[pv] = {
                 name: pv,
                 yRange: {min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY},
                 yLockedRange: _that._y_range_lock[pv] ? _that._y_range_lock[pv] : undefined,
                 points: [],
                 color: _that._colors[pv],
                 scale: _that._scales[pv]
-            });
-            _that.data_index_for_pv[pv] = i;
-          });
+            };
+            _that._socket.send(pv);
+          }
+          
+          this._start_pv_connection = function(pvname) {
+            if (this._socket.readyState == 1) {
+              //If the socket is already open, go ahead and send the request to the server.
+              console.log("Socket open, sending.");
+              this._send_pv_request(pvname);
+            } else {
+              //Dump this in the connection queue.
+              console.log("Socket isn't open, queuing.");
+              this._to_be_connected.push(pvname);
+            } 
+          }
+          
+          if (this._needs_loadinfo) {
+            var pv;
+            while (pv = this._needs_loadinfo.pop()) {
+              this.load_pvtypeinfo(pv);
+            }
+          }
+          
+          this._redraw = function() {
+            var x_range = {
+                min: _that._interval.from / 1000. ,   // msec -> secs.*
+                max: _that._interval.to   / 1000.     // msec -> secs.*
+            };
+            var data_to_plot = [];
+            for (pv in _that.pv_data) {
+              if (_that._plot[pv]) {
+                data_to_plot.push(_that.pv_data[pv]);
+              }
+            }
+            _that.ds.get('timeseries').load(x_range, data_to_plot);
+          };
       
-          console.log("PV List is: " + _that._options.pvs)
+          this._buffer_size = 3000;
+          this.pv_data = {};
+      
+          //console.log("PV List is: " + _that._options.pvs)
       
           //When the websocket connection opens, request to get data for PVs in the list.
           this._socket.onopen = function() {
-            _that._options.pvs.forEach(function(pv) {
-              console.log("Connecting to " + pv);
-              _that._socket.send(pv);
-            });
+            var pv;
+            while (pv = _that._to_be_connected.pop()) {
+              _that._send_pv_request(pv);
+            }
           };
-      
+          
           //Parse incoming messages.
           this._socket.onmessage = function(event) {
             var json = JSON.parse(event.data);
             if (json.msg_type === "connection") {
               //This happens when a pv connection starts or ends.
-              console.log("Connected to " + json.pvname);
+              //I think the websocket server has a bug where it doesn't always send these...
+              if (json.conn) {
+                var pv = json.pvname;
+                _that._is_connected.push(pv);
+                console.log("Connected to " + pv);
+              } else {
+                console.log("Connection to " + json.pvname + " closed.");
+              }
               return;
             }
         
             if (json.msg_type === "monitor") {
               //This happens any time a PV updates.
               if(json.value !== undefined){
-                var i = _that.data_index_for_pv[json.pvname];
+                var pv = json.pvname;
                 var now = new Date();
                 var v = json.value;
                 var t = now / 1000.;
             
                 //This is probably a super-inefficient way to implement a ring buffer.
-                if(_that.pv_data[i].points.length >= _that._buffer_size) {
-                  _that.pv_data[i].points.shift();
+                if(_that.pv_data[pv].points.length >= _that._buffer_size) {
+                  _that.pv_data[pv].points.shift();
                 }
-                _that.pv_data[i].points.push([t,v]);
-                _that.pv_data[i].yLockedRange = _that._y_range_lock[json.pvname] ? _that._y_range_lock[json.pvname] : undefined
-                _that.pv_data[i].yRange.min = Math.min(_that.pv_data[i].yRange.min, v);
-                _that.pv_data[i].yRange.max = Math.max(_that.pv_data[i].yRange.max, v);
-                _that._interval._end_time_changed(now);
-                var x_range = {
-                    min: _that._interval.from / 1000. ,   // msec -> secs.*
-                    max: _that._interval.to   / 1000.     // msec -> secs.*
-                } ;
-                _that.ds.get('timeseries').load(x_range, _that.pv_data);
+                _that.pv_data[pv].points.push([t,v]);
+                _that.pv_data[pv].yLockedRange = _that._y_range_lock[pv] ? _that._y_range_lock[pv] : undefined
+                _that.pv_data[pv].yRange.min = Math.min(_that.pv_data[pv].yRange.min, v);
+                _that.pv_data[pv].yRange.max = Math.max(_that.pv_data[pv].yRange.max, v);
+                _that._interval._end_time_changed(now); //Probably abusing a private method here.
+                
+                if (_that._animations_started == false) {
+                  _that._animations_started = true;
+                  _that._do_anim_loop();
+                }
+                //_that._redraw();
+                //_that.ds.get('timeseries').load(x_range, _that.pv_data);
           	  }
               return;
             }
+          }; //End of socket.onmessage
+          
+          
+          this._do_anim_loop = function() {
+              window.requestAnimationFrame(_that._do_anim_loop);
+              _that._redraw();
           };
         }
       }
       // Starting point for the application
       $(function () {
-          var viewer = new EpicsViewer(["BPMS:LI24:801:X1H", "BPMS:LI24:301:X1H"]) ;
+          var viewer = new EpicsViewer(["BPMS:LI24:801:X1H", "LASR:IN20:196:PWR"]) ;
           viewer.run() ;
       }) ;
 });
