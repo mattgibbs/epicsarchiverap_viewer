@@ -115,7 +115,7 @@ require ([
           });
           //Make a DisplaySelector, which is pretty useless because we only have one item.
           this.ds = new DisplaySelector ($('#display'), [
-            {  id:     'StripTool' ,
+            {  id:     'timeseries' ,
                title:  'T<sub>series</sub>' ,
                descr:  'Plots PV values vs. Time.' ,
                widget: new TimeSeriesPlotN({
@@ -242,12 +242,12 @@ require ([
                   .mouseover(function () {
                       var tr = $(this).closest('tr') ;
                       var pvname = tr.prop('id') ;
-                      _that.ds.get('StripTool').highlight(pvname, true) ;
+                      _that.ds.get('timeseries').highlight(pvname, true) ;
                   })
                   .mouseout(function () {
                       var tr = $(this).closest('tr') ;
                       var pvname = tr.prop('id') ;
-                      _that.ds.get('StripTool').highlight(pvname, false) ;
+                      _that.ds.get('timeseries').highlight(pvname, false) ;
                   });
               /*
               this._selectedPVs[pvname].find('button[name="delete"]').button().click(function () {
@@ -375,7 +375,7 @@ require ([
                     min: _that._interval.from / 1000. ,   // msec -> secs.*
                     max: _that._interval.to   / 1000.     // msec -> secs.*
                 } ;
-                _that.ds.get('StripTool').load(x_range, _that.pv_data);
+                _that.ds.get('timeseries').load(x_range, _that.pv_data);
           	  }
               return;
             }
