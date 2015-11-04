@@ -66,7 +66,7 @@ require ([
         var _that = this ;
         this._needs_loadinfo = pvs? pvs : [];
         this._to_be_connected = [];
-        this._is_connected = [];
+        this._is_connected = {};
         this._pvfinder = null ;         // UI for searching PVs to be included into the work set
         this._selected = null ;         // the current workset table
         this._interval = null ;         // the current timeine interval management
@@ -83,7 +83,7 @@ require ([
           //Make a Finder, which is how you select PVs.
           this._pvfinder = new Finder ($('#finder'), {
               on_select: function (pvname) {
-                  if ((_.indexOf(_that._is_connected, pvname) === -1) && (_.indexOf(_that._to_be_connected, pvname) === -1)) {
+                  if ((!_that._is_connected[pvname]) && (_.indexOf(_that._to_be_connected, pvname) === -1)) {
                       _that.load_pvtypeinfo(pvname);
                   }
               }
@@ -239,13 +239,13 @@ require ([
                       var pvname = tr.prop('id') ;
                       _that.ds.get('timeseries').highlight(pvname, false) ;
                   });
-              /*
+              
               this._selectedPVs[pvname].find('button[name="delete"]').button().click(function () {
                   var tr = $(this).closest('tr') ;
                   var pvname = tr.prop('id') ;
                   _that._removeEntryFromSelected(pvname) ;
               }) ;
-              */
+              
               
               this._selectedPVs[pvname].find('input[name="plot"]').change(function () {
                   var tr = $(this).closest('tr') ;
@@ -253,25 +253,17 @@ require ([
                   _that._plot[pvname] = $(this).prop('checked') ? true : false ;
               }) ;
               
-              /*
-              this._selectedPVs[pvname].find('select[name="processing"]').change(function () {
-                  var tr = $(this).closest('tr') ;
-                  var pvname = tr.prop('id') ;
-                  _that._processing[pvname] = $(this).val() ;
-                  //_that._loadAllTimeLines() ;
-              }) ;*/
-              /*
               this._selectedPVs[pvname].find('select[name="scale"]').change(function () {
                   var tr = $(this).closest('tr') ;
                   var pvname = tr.prop('id') ;
                   _that._scales[pvname] = $(this).val() ;
                   //delete _that._y_range_lock[pvname] ;
                   //_that._loadAllTimeLines() ;
-              }).prop('disabled', true) ;*/
+              }).prop('disabled', true) ;
               _that._start_pv_connection(pvname);
           } ;
           
-          /*
+          
           this._removeEntryFromSelected = function (pvname) {
               delete this._plot[pvname] ;
               delete this._colors[pvname] ;
@@ -280,11 +272,9 @@ require ([
               this._selectedPVs[pvname].remove() ;
               delete this._selectedPVs[pvname] ;
               delete this.pvtypeinfo[pvname] ;
-              delete this.pvdata[pvname] ;
-              this._options.pvs = _.filter(this._options.pvs, function (pv) { return pv !== pvname ; }) ;
-              //this._loadAllTimeLines() ;
-          } ;
-          
+              this._send_pv_close(pvname);
+          };
+          /*
           this._loadAllTimeLines = function (xbins) {
               this._num2load = this._options.pvs.length ;
               if (this._num2load)
@@ -310,7 +300,14 @@ require ([
                 color: _that._colors[pv],
                 scale: _that._scales[pv]
             };
-            _that._socket.send(pv);
+            _that._socket.send(JSON.stringify({"action": "connect", "pv": pv}));
+          }
+          
+          this._send_pv_close = function(pv) {
+            console.log("Closing connection to " + pv);
+            _that._socket.send(JSON.stringify({"action": "disconnect", "pv": pv}));
+            delete _that._is_connected[pv];
+            delete _that.pv_data[pv];
           }
           
           this._start_pv_connection = function(pvname) {
@@ -333,6 +330,7 @@ require ([
           }
           
           this._redraw = function() {
+            _that._interval._end_time_changed(new Date()); //Probably abusing a private method here.
             var x_range = {
                 min: _that._interval.from / 1000. ,   // msec -> secs.*
                 max: _that._interval.to   / 1000.     // msec -> secs.*
@@ -367,7 +365,7 @@ require ([
               //I think the websocket server has a bug where it doesn't always send these...
               if (json.conn) {
                 var pv = json.pvname;
-                _that._is_connected.push(pv);
+                _that._is_connected[pv] = true;
                 console.log("Connected to " + pv);
               } else {
                 console.log("Connection to " + json.pvname + " closed.");
@@ -379,9 +377,8 @@ require ([
               //This happens any time a PV updates.
               if(json.value !== undefined){
                 var pv = json.pvname;
-                var now = new Date();
                 var v = json.value;
-                var t = now / 1000.;
+                var t = Date.now() / 1000.;
             
                 //This is probably a super-inefficient way to implement a ring buffer.
                 if(_that.pv_data[pv].points.length >= _that._buffer_size) {
@@ -391,10 +388,10 @@ require ([
                 _that.pv_data[pv].yLockedRange = _that._y_range_lock[pv] ? _that._y_range_lock[pv] : undefined
                 _that.pv_data[pv].yRange.min = Math.min(_that.pv_data[pv].yRange.min, v);
                 _that.pv_data[pv].yRange.max = Math.max(_that.pv_data[pv].yRange.max, v);
-                _that._interval._end_time_changed(now); //Probably abusing a private method here.
                 
                 if (_that._animations_started == false) {
                   _that._animations_started = true;
+                  _that.ds.resize();
                   _that._do_anim_loop();
                 }
                 //_that._redraw();
