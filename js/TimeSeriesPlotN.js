@@ -304,8 +304,8 @@ function (
                 // Store the present position of the mouse for range change
                 // operations performed when the mouse will be up.
                 _that._mouseDownPosition = {
-                    x: e.offsetX ,
-                    y: e.offsetY
+                    x: _.isUndefined(e.offsetX) ? e.originalEvent.layerX : e.offsetX,
+                    y: _.isUndefined(e.offsetY) ? e.originalEvent.layerY : e.offsetY
                 };
             }) ;
             this._canvasGrid.mousemove(function (e) {
@@ -316,8 +316,8 @@ function (
                 if (_that._mouseDownPosition) {
 
                     // Find a region where the mouse is in
-                    var x = e.offsetX ,
-                        y = e.offsetY ,
+                    var x = _.isUndefined(e.offsetX) ? e.originalEvent.layerX : e.offsetX,
+                        y = _.isUndefined(e.offsetY) ? e.originalEvent.layerY : e.offsetY,
                         deltaX = x - _that._mouseDownPosition.x ,
                         deltaY = y - _that._mouseDownPosition.y ;
 
@@ -362,8 +362,8 @@ function (
                 }
 
                 // Find a region where the mouse is in
-                var x = e.offsetX ,
-                    y = e.offsetY ;
+                var x = _.isUndefined(e.offsetX) ? e.originalEvent.layerX : e.offsetX,
+                    y = _.isUndefined(e.offsetY) ? e.originalEvent.layerY : e.offsetY;
 
                 for (var i in _that._region.X) {
                     var reg = _that._region.X[i] ;
@@ -389,8 +389,8 @@ function (
                 e.preventDefault() ;
 
                 // Find a region where the mouse is in
-                var x = e.offsetX ,
-                    y = e.offsetY ,
+                var x = _.isUndefined(e.offsetX) ? e.originalEvent.layerX : e.offsetX,
+                    y = _.isUndefined(e.offsetY) ? e.originalEvent.layerY : e.offsetY,
                     deltaX = x - _that._mouseDownPosition.x ,
                     deltaY = y - _that._mouseDownPosition.y ;
 
